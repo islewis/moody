@@ -16,9 +16,66 @@ import (
 
 var checkinCmd = &cobra.Command{
 	Use:   "checkin",
-	Short: "Record mood, and other daily checks",
+	Short: "Record mood, as well as and other daily checks",
 	Long:  "TO DO",
 	Run: func(cmd *cobra.Command, args []string) {
+		// Loop through checks
+		err := viper.ReadInConfig()    // Find and read the config file
+		if err != nil {panic(err)}
+
+		// Get list of checks
+		checkMap := viper.GetStringMap("checks")
+		var checks []string
+    for key := range checkMap {
+      checks = append(checks, key)
+    }
+
+    // Iterate through checks
+		for _, check := range checks {
+			// Validate input differently for each data type
+			if viper.GetString("checks." + check + ".type") == "range" {
+    		// Before we take an input, confirm we have a maximum and a minimum defined
+				maxValLoc := ("checks." + check + ".max")
+				if viper.GetString(maxValLoc) == "" {
+					errorMessage := "ERROR: the " + check + " definition is missing a maximum value.\n"
+        	errorMessage += "All 'range' types need to have a max and a min defined. This should be " + maxValLoc + " in your config\n."
+
+        	log.Fatalf(errorMessage)
+				}
+
+				minValLoc := ("checks." + check + ".min")
+				if viper.GetString(maxValLoc) == "" {
+					errorMessage := "ERROR: the " + check + " definition is missing a minimum value.\n"
+        	errorMessage += "All 'range' types need to have a max and a min defined. This should be " + minValLoc + " in your config\n."
+
+        	log.Fatalf(errorMessage)
+				}
+				// Get input until we have a value that is within our valid range
+				for {
+					fmt.Println(viper.GetString("checks." + check + ".description"))	
+					fmt.Print(check+": ")
+					var input int
+					fmt.Scanln(&input)	
+
+				maxVal, _ := strconv.Atoi(viper.GetString(maxValLoc))
+				minVal, _ := strconv.Atoi(viper.GetString(minValLoc))
+					if input > maxVal {
+						fmt.Println("\n")
+						fmt.Println("Input is greater than the maximum of " + viper.GetString(maxValLoc))
+						continue
+					} else if input < minVal {
+						fmt.Println("\n")
+						fmt.Println("Input is less than than the minimum of " + viper.GetString(minValLoc))
+						continue
+					} else {
+						break	
+					}
+				}
+			}
+		}
+
+
+
 		// Get Daily Mood
 		moodValues := []int{-2, -1, 0, 1, 2}
 		fmt.Println("On a scale of (-2,-1, 0, 1, 2) how was your mood today?")
@@ -66,7 +123,7 @@ func init() {
 func initConfig() {
 	// set config info
 	configName := "config"
-	configType:= ".yaml"
+	configType:= "yaml"
 	viper.SetConfigName(configName) // name of config file (without extension)
 	viper.SetConfigType(configType)   // REQUIRED if the config file does not have the extension in the name
 
@@ -77,13 +134,12 @@ func initConfig() {
 
 	err := viper.ReadInConfig()
 	if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-		// make sure dirs are created
-		fmt.Println("Config not found!")
-		fmt.Println(viper.ConfigFileUsed)
-		_ = os.MkdirAll(dirPath, os.ModePerm)
-		// write file with any defaults
-		// Init config file here when ready to build out
+		fmt.Println("Config not found, creating one...")
 
+		// make sure dirs are created
+		_ = os.MkdirAll(dirPath, os.ModePerm)
+
+		// write file with any defaults
 		defaultConfig := []byte(
 `checks:
   mood:
@@ -98,7 +154,7 @@ func initConfig() {
     description: "How many glasses of water did you drink?"
     type: "int"`)
 
-		fileToWrite := dirPath + "/" + configName + configType
+		fileToWrite := dirPath + "/" + configName + "." +  configType
 		err := ioutil.WriteFile(fileToWrite, defaultConfig, 0644)
     if err != nil {
         fmt.Println("Error writing to file:", err)
@@ -106,6 +162,5 @@ func initConfig() {
     }
 	} else {
 		return
-		// Config file was found but another error was produced
 	}
 }
