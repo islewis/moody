@@ -6,7 +6,9 @@ package cmd
 
 import (
 	"os"
-
+	"fmt"
+	"io/ioutil"
+	"github.com/spf13/viper"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +48,51 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	cobra.OnInitialize(initConfig)
 }
 
+func initConfig() {
+	// set config info
+	configName := "config"
+	configType := "yaml"
+	viper.SetConfigName(configName) // name of config file (without extension)
+	viper.SetConfigType(configType) // REQUIRED if the config file does not have the extension in the name
 
+	// Get config path
+	home, _ := os.UserHomeDir()
+	dirPath := home + "/.config/moody"
+	viper.AddConfigPath(dirPath)
+
+	err := viper.ReadInConfig()
+	if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		fmt.Println("Config not found, creating one...")
+
+		// make sure dirs are created
+		_ = os.MkdirAll(dirPath, os.ModePerm)
+
+		// write file with any defaults
+		defaultConfig := []byte(
+			`checks:
+  mood:
+    description: "What was your mood today?"
+    type: "range"
+    min: "-2"
+    max: "2"
+  exercise:
+    description: "Did you exercise today?"
+    type: "bool"
+  water:
+    description: "How many glasses of water did you drink?"
+    type: "int"`)
+
+		fileToWrite := dirPath + "/" + configName + "." + configType
+		err := ioutil.WriteFile(fileToWrite, defaultConfig, 0644)
+		if err != nil {
+			fmt.Println("Error writing to file:", err)
+			return
+		}
+	} else {
+		return
+	}
+}
