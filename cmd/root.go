@@ -1,18 +1,18 @@
 /*
 Copyright © 2023 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
 import (
-	"os"
 	"fmt"
-	"io/ioutil"
-	"github.com/spf13/viper"
+	"log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"io/ioutil"
+	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
+	"os"
 )
-
-
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -88,11 +88,31 @@ func initConfig() {
 
 		fileToWrite := dirPath + "/" + configName + "." + configType
 		err := ioutil.WriteFile(fileToWrite, defaultConfig, 0644)
+  	fmt.Println("Config created at " + fileToWrite)
 		if err != nil {
 			fmt.Println("Error writing to file:", err)
 			return
 		}
-	} else {
-		return
 	}
+
+	// If DB doesnt exist, create it
+	dbLocation := dirPath + "/data.db"
+  _, err = os.Stat(dbLocation)
+  if os.IsNotExist(err) {
+  	fmt.Println("Database not found, creating...")
+		db, err := sql.Open("sqlite3", dbLocation)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dbq := `
+			CREATE TABLE DailyEntries (date PRIMARY KEY);
+			`
+		_, err = db.Exec(dbq)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		defer db.Close()
+  	fmt.Println("Database created at " + dbLocation)
+  }
 }
