@@ -104,9 +104,13 @@ func initConfig() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		dbq := `
-			CREATE TABLE DailyEntries (date PRIMARY KEY);
-			`
+			CREATE TABLE DailyEntries (
+    		id INTEGER PRIMARY KEY AUTOINCREMENT,
+    		date DATE UNIQUE
+		);
+		`
 		_, err = db.Exec(dbq)
 		if err != nil {
 			log.Fatal(err)

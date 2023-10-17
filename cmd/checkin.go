@@ -2,6 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+  "strings"
+	"database/sql"
+	"time"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"log"
@@ -84,19 +88,52 @@ func (r Check) TakeInput() string {
 		var inputStr string
 		fmt.Scanln(&inputStr)
 
+		// handle "yes" and "no" inputs as bools
+		if strings.ToLower(inputStr) == "yes" {
+			inputStr = "true"
+		} else if strings.ToLower(inputStr) == "no" {
+			inputStr = "false"
+		}
+
 		_, err := strconv.ParseBool(inputStr)
 		if err != nil {
 			log.Fatal(err)
 		}
 		return inputStr
-	} else {
-		log.Fatal(`Error: type "` + r.Manifest["type"].(string) + `" for check ` + r.Name)
 	}
+	// Error out before returning the placeholder string
+	log.Fatal(`Error: type "` + r.Manifest["type"].(string) + `" for check ` + r.Name + "not recognized")
 	return ""
 }
 
+func (r Check) WriteToDB(value, pathToDB string) {
+	db, err := sql.Open("sqlite3", pathToDB)
+	if err != nil {log.Fatal(err)}
+
+	// Add an empty date entry which we'll ALTER as input comes in
+	todaysDate := time.Now()
+	formattedDate := todaysDate.Format("20060102")
+  dateInsert := fmt.Sprintf(`INSERT INTO DailyEntries ("date") VALUES ("%s");`, formattedDate)
+	_, _ = db.Exec(dateInsert)
+	
+	// Add Column. If it exists, we get an error which we dont do anything with 
+	// Could handle this error more gracefully
+	dbTable := fmt.Sprintf(`ALTER TABLE DailyEntries ADD COLUMN %s`, r.Name)
+	_, _ = db.Exec(dbTable)
+
+  dbAlter := fmt.Sprintf(`
+		UPDATE DailyEntries
+		SET "%s" = "%s"
+		WHERE date = "%s";`, r.Name, value, formattedDate)
+	_, err = db.Exec(dbAlter)
+	if err != nil {log.Fatal(err)}
+
+	defer db.Close()
+}
+
 var testCmd = &cobra.Command{
-	Use: "test",
+	Use: "check",
+	Short: "Fill out your daily checks",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Loop through checks
 		err := viper.ReadInConfig() // Find and read the config file
@@ -115,7 +152,10 @@ var testCmd = &cobra.Command{
 			checksList = append(checksList, check)
 		}
 		for key := range checksList {
-			checksList[key].TakeInput()
+			value := checksList[key].TakeInput()
+			// need to pull the DB location from some sort of default config
+			home, _ := os.UserHomeDir()
+			checksList[key].WriteToDB(value, home + "/.config/moody/data.db")
 		}
 	},
 }
